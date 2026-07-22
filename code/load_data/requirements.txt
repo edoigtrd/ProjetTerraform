@@ -1,0 +1,5 @@
+atproto
+python-dotenv
+psycopg2-binary
+peewee
+openai
