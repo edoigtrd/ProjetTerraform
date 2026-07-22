@@ -41,6 +41,6 @@ resource "scaleway_iam_api_key" "db_key" {
 }
 
 locals {
-  database_url = "postgres://${scaleway_iam_api_key.db_key.access_key}:${scaleway_iam_api_key.db_key.secret_key}@${replace(scaleway_sdb_sql_database.main.endpoint, "postgres://", "")}"
+  database_url = "postgres://${scaleway_iam_application.db_app.id}:${scaleway_iam_api_key.db_key.secret_key}@${replace(scaleway_sdb_sql_database.main.endpoint, "postgres://", "")}"
 }
 

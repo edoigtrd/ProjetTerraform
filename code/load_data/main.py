@@ -96,11 +96,14 @@ if __name__ == "__main__":
     db.bind([Post])
     db.create_tables([Post])
     for post in fetch_posts():
-        category = classify_with_openai(post.text)
-        Post.create(
-            author_handle=post.author.handle,
-            text=post.text,
-            category=category,
-            posted_at=datetime.fromisoformat(post.record.created_at)
-        )
-    
+        try:
+            category = classify_with_openai(post.record.text)
+            Post.create(
+                author_handle=post.author.handle,
+                text=post.record.text,
+                category=category,
+                posted_at=datetime.fromisoformat(post.record.created_at)
+            )
+        except Exception as e:
+            print(f"ERROR classifying post from {post.author.handle}: {type(e).__name__}: {e}", flush=True)
+
