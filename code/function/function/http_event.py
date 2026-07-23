@@ -70,6 +70,24 @@ def get_route_key(evt: dict) -> str:
     return evt.get("routeKey") or (evt.get("requestContext") or {}).get("routeKey") or ""
 
 
+def get_query_params(evt: dict) -> dict:
+    params = evt.get("queryStringParameters")
+    if params:
+        return dict(params)
+
+    query_string = evt.get("rawQueryString")
+    if not query_string:
+        path = evt.get("rawPath") or evt.get("path") or ""
+        if "?" in path:
+            query_string = path.split("?", 1)[1]
+
+    if not query_string:
+        return {}
+
+    parsed = parse_qs(query_string, keep_blank_values=True)
+    return {k: (v[0] if len(v) == 1 else v) for k, v in parsed.items()}
+
+
 def match_route(evt: dict) -> str:
     route_key = get_route_key(evt)
     if route_key:

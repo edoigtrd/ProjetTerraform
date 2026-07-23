@@ -6,3 +6,7 @@ output "connection_string" {
 output "hello_world_function_url" {
   value = "https://${scaleway_function.hello_world.domain_name}"
 }
+
+output "dashboard_url" {
+  value = scaleway_container.dashboard.public_endpoint
+}

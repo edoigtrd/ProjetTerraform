@@ -25,6 +25,10 @@ tfoutput.json
 # Terraform build artifacts
 *.zip
 
+# Vendored function dependencies (rebuilt by terraform/function.tf and code/function/package.sh)
+code/function/build/
+code/function/function/package/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -32,6 +36,12 @@ __pycache__/
 .venv/
 venv/
 .ipynb_checkpoints/
+
+# Editor
+.vscode/
+
+# Local scratch scripts
+/t.py
 
 # OS
 .DS_Store
