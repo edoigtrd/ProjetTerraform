@@ -22,6 +22,9 @@ terraform.rc
 # Terraform provider dev output
 tfoutput.json
 
+# Terraform build artifacts
+*.zip
+
 # Python
 __pycache__/
 *.py[cod]

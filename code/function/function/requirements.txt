@@ -1,0 +1,2 @@
+# Add your function's dependencies here, e.g.:
+# requests==2.32.5
