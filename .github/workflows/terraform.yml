@@ -1,0 +1,126 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches: [master]
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+defaults:
+  run:
+    working-directory: terraform
+
+jobs:
+  validate:
+    name: fmt & validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive -diff
+
+      # No backend is configured (state is local-only for this project), so
+      # init/validate never need real Scaleway credentials.
+      - name: Terraform init
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+  plan:
+    name: Terraform plan
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
+      SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+      TF_VAR_project_id: ${{ secrets.SCW_PROJECT_ID }}
+      TF_VAR_bsky_app_name: ${{ secrets.BSKY_APP_NAME }}
+      TF_VAR_bsky_app_password: ${{ secrets.BSKY_APP_PASSWORD }}
+      TF_VAR_openai_api_endpoint: ${{ secrets.OPENAI_API_ENDPOINT }}
+      TF_VAR_openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Check Scaleway credentials are configured
+        id: creds
+        run: |
+          if [ -z "$SCW_ACCESS_KEY" ] || [ -z "$SCW_SECRET_KEY" ] || [ -z "$TF_VAR_project_id" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Warn if secrets are missing
+        if: steps.creds.outputs.skip == 'true'
+        run: echo "::warning::Repository secrets (SCW_ACCESS_KEY, SCW_SECRET_KEY, SCW_PROJECT_ID, ...) are not set - skipping terraform plan. See README for the list of required secrets."
+
+      # Note: there is no remote backend for this project (state stays local
+      # to whoever runs `terraform apply`), so this plan always starts from
+      # an empty state. It validates the configuration against the real
+      # Scaleway API but will show every resource as "to create" rather than
+      # a true diff against the deployed infrastructure.
+      - name: Terraform init
+        if: steps.creds.outputs.skip == 'false'
+        run: terraform init
+
+      - name: Terraform plan
+        if: steps.creds.outputs.skip == 'false'
+        run: terraform plan -no-color -input=false -lock=false | tee plan_output.txt
+
+      - name: Comment plan on PR
+        if: steps.creds.outputs.skip == 'false' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '#### Terraform Plan';
+            let output = 'plan produced no output';
+            try {
+              output = fs.readFileSync('terraform/plan_output.txt', 'utf8').slice(-60000);
+            } catch (e) {}
+            const body = `${marker}\n\n> Pas de backend distant : ce plan part d'un state vide et liste donc tout en "to create", ce n'est pas un vrai diff avec l'infra deployee.\n\n<details><summary>Voir le plan</summary>\n\n\`\`\`\n${output}\n\`\`\`\n\n</details>`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body && c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
