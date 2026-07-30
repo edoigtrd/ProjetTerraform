@@ -16,7 +16,7 @@ terraform {
 }
 
 provider "scaleway" {
-  region     = "fr-par"
+  region     = "nl-ams"
   project_id = var.project_id
 }
 
